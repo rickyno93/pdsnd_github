@@ -1,0 +1,102 @@
+_ Part 2:
+  Question 1:
+We want to find out how the two stores compare in their count of rental orders during every month for all the years
+we have data for. Write a query that returns the store ID for the store, the year and month and the number of rental orders
+each store has fulfilled for that month. Your table should include a column for each of the following: year, month, store ID
+and count of rental orders fulfilled during that month.
+
+/* Query 1 - Part 2 */
+SELECT
+  DATE_PART('month', r.rental_date) AS rental_month,
+  DATE_PART('year', r.rental_date) AS rental_year,
+  str.store_id,
+  COUNT(r.rental_id) AS count_rentals
+FROM rental r
+JOIN staff stf
+  ON r.staff_id = stf.staff_id
+JOIN store str
+  ON stf.store_id = str.store_id
+GROUP BY
+  DATE_PART('month', r.rental_date),
+  DATE_PART('year', r.rental_date),
+  str.store_id
+ORDER BY COUNT(r.rental_id) DESC ;
+
+  Question 2:
+We would like to know who were our top 10 paying customers, how many payments they made on a monthly basis during 2007,
+and what was the amount of the monthly payments. Can you write a query to capture the customer name, month and year of payment,
+and total payment amount for each month by these top 10 paying customers?
+
+/* Query 2 - Part 2 */
+WITH top_10_payment_tab AS (
+SELECT
+  c.first_name || ' ' || c.last_name AS full_name, 
+  SUM(p.amount) as amount_total
+FROM customer c
+JOIN payment p
+ON p.customer_id = c.customer_id
+GROUP BY c.first_name || ' ' || c.last_name
+ORDER BY SUM(p.amount) DESC
+LIMIT 10)
+
+SELECT
+  DATE_TRUNC('month', p.payment_date) pay_month,
+  c.first_name || ' ' || c.last_name AS full_name,
+  COUNT(p.amount) AS pay_countpermon,
+  SUM(p.amount) AS pay_amount
+FROM customer c
+JOIN payment p
+ON p.customer_id = c.customer_id
+WHERE c.first_name || ' ' || c.last_name IN (
+  SELECT t1.full_name
+  FROM top_10_payment_tab t1)
+AND (p.payment_date BETWEEN '2007-01-01' AND '2008-01-01')
+GROUP BY
+  c.first_name || ' ' || c.last_name,
+  DATE_TRUNC('month', p.payment_date)
+ORDER BY
+  c.first_name || ' ' || c.last_name,
+  DATE_TRUNC('month', p.payment_date),
+  COUNT(p.amount)
+ASC;
+
+  Question 3:
+Finally, for each of these top 10 paying customers, I would like to find out the difference across their monthly payments during 2007.
+Please go ahead and write a query to compare the payment amounts in each successive month. Repeat this for each of these 10 paying customers.
+Also, it will be tremendously helpful if you can identify the customer name who paid the most difference in terms of payments.
+
+/* Query 3 - Part 2 */
+WITH top_10_payment_tab AS (
+SELECT
+  p.customer_id,
+  SUM(p.amount) AS sum_payment
+FROM payment p
+WHERE payment_date BETWEEN '2007-01-01' AND '2007-12-31'
+GROUP BY p.customer_id
+ORDER BY SUM(p.amount) DESC
+LIMIT 10),
+
+payment_table AS (
+SElECT
+  DATE_TRUNC('month',p.payment_date) AS payment_month,
+  c.first_name || ' '|| c.last_name AS customer_fullname,
+  COUNT(p.amount) AS payment_per_month,
+  SUM(p.amount) AS monthly_total
+FROM customer c
+JOIN top_10_payment_tab top10
+  ON c.customer_id = top10.customer_id
+JOIN payment p
+  ON top10.customer_id = p.customer_id
+GROUP BY
+  DATE_TRUNC('month',p.payment_date),
+  c.first_name || ' '|| c.last_name
+ORDER BY
+  c.first_name || ' '|| c.last_name,
+  DATE_TRUNC('month',p.payment_date)
+ASC)
+
+SELECT
+  payment_month as pay_mon, customer_fullname as fullname, payment_per_month as pay_countpermon, monthly_total as pay_amount,
+  LEAD(monthly_total) OVER (PARTITION BY customer_fullname) AS LEAD,
+  LEAD(monthly_total) OVER (PARTITION BY customer_fullname) - payment_table.monthly_total AS monthly_difference
+FROM payment_table;
